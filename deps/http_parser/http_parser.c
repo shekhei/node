@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <stdio.h>
 
 #ifndef ULLONG_MAX
 # define ULLONG_MAX ((uint64_t) -1) /* 2^64-1 */
@@ -423,6 +424,15 @@ enum http_host_state
 
 #define STRICT_TOKEN(c)     (tokens[(unsigned char)c])
 
+#define NEXTCHAR() \
+  if (UNLIKELY(++p == (data+len))) { goto outofloop; }      \
+  ch = *p;                                                  \
+  parser->nread += 1;                                              \
+  if (UNLIKELY(parser->nread > (HTTP_MAX_HEADER_SIZE))) {            \
+    SET_ERRNO(HPE_HEADER_OVERFLOW);                                  \
+    goto error;                                                      \
+  }
+
 #if HTTP_PARSER_STRICT
 #define TOKEN(c)            (tokens[(unsigned char)c])
 #define IS_URL_CHAR(c)      (BIT_AT(normal_url_char, (unsigned char)c))
@@ -762,6 +772,7 @@ reexecute:
 
         switch (ch) {
           case 'H':
+
             UPDATE_STATE(s_res_H);
             break;
 
@@ -781,23 +792,19 @@ reexecute:
       case s_res_H:
         STRICT_CHECK(ch != 'T');
         UPDATE_STATE(s_res_HT);
-        break;
-
+        NEXTCHAR();
       case s_res_HT:
         STRICT_CHECK(ch != 'T');
         UPDATE_STATE(s_res_HTT);
-        break;
-
+        NEXTCHAR();
       case s_res_HTT:
         STRICT_CHECK(ch != 'P');
         UPDATE_STATE(s_res_HTTP);
-        break;
-
+        NEXTCHAR();
       case s_res_HTTP:
         STRICT_CHECK(ch != '/');
         UPDATE_STATE(s_res_first_http_major);
-        break;
-
+        NEXTCHAR();
       case s_res_first_http_major:
         if (UNLIKELY(ch < '0' || ch > '9')) {
           SET_ERRNO(HPE_INVALID_VERSION);
@@ -806,30 +813,30 @@ reexecute:
 
         parser->http_major = ch - '0';
         UPDATE_STATE(s_res_http_major);
-        break;
+        NEXTCHAR();
 
       /* major HTTP version or dot */
       case s_res_http_major:
       {
-        if (ch == '.') {
-          UPDATE_STATE(s_res_first_http_minor);
+        if ( ch != '.' ) {
+
+          if (!IS_NUM(ch)) {
+            SET_ERRNO(HPE_INVALID_VERSION);
+            goto error;
+          }
+
+          parser->http_major *= 10;
+          parser->http_major += ch - '0';
+
+          if (UNLIKELY(parser->http_major > 999)) {
+            SET_ERRNO(HPE_INVALID_VERSION);
+            goto error;
+          }
+
           break;
         }
-
-        if (!IS_NUM(ch)) {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
-        parser->http_major *= 10;
-        parser->http_major += ch - '0';
-
-        if (UNLIKELY(parser->http_major > 999)) {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
-        break;
+        UPDATE_STATE(s_res_first_http_minor);
+        NEXTCHAR();
       }
 
       /* first digit of minor HTTP version */
@@ -841,7 +848,7 @@ reexecute:
 
         parser->http_minor = ch - '0';
         UPDATE_STATE(s_res_http_minor);
-        break;
+        NEXTCHAR();
 
       /* minor HTTP version or end of request line */
       case s_res_http_minor:
@@ -1139,22 +1146,22 @@ reexecute:
       case s_req_http_H:
         STRICT_CHECK(ch != 'T');
         UPDATE_STATE(s_req_http_HT);
-        break;
+        NEXTCHAR();
 
       case s_req_http_HT:
         STRICT_CHECK(ch != 'T');
         UPDATE_STATE(s_req_http_HTT);
-        break;
+        NEXTCHAR();
 
       case s_req_http_HTT:
         STRICT_CHECK(ch != 'P');
         UPDATE_STATE(s_req_http_HTTP);
-        break;
+        NEXTCHAR();
 
       case s_req_http_HTTP:
         STRICT_CHECK(ch != '/');
         UPDATE_STATE(s_req_first_http_major);
-        break;
+        NEXTCHAR();
 
       /* first digit of major HTTP version */
       case s_req_first_http_major:
@@ -1539,8 +1546,8 @@ reexecute:
 
               limit = MIN(limit, HTTP_MAX_HEADER_SIZE);
 
-              p_cr = (const char*) memchr(p, CR, limit);
-              p_lf = (const char*) memchr(p, LF, limit);
+              p_cr = (const char*) memchr(p, CR, limit);      // finds the next CR
+              p_lf = (const char*) memchr(p, LF, limit);      // finds the next LF
               if (p_cr != NULL) {
                 if (p_lf != NULL && p_cr >= p_lf)
                   p = p_lf;
@@ -2056,7 +2063,7 @@ reexecute:
         goto error;
     }
   }
-
+outofloop:
   /* Run callbacks for any marks that we have leftover after we ran our of
    * bytes. There should be at most one of these set, so it's OK to invoke
    * them in series (unset marks will not result in callbacks).
@@ -2066,7 +2073,6 @@ reexecute:
    * we'd otherwise have (since CALLBACK_DATA() is meant to be run with a 'p'
    * value that's in-bounds).
    */
-
   assert(((header_field_mark ? 1 : 0) +
           (header_value_mark ? 1 : 0) +
           (url_mark ? 1 : 0)  +
