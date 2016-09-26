@@ -425,13 +425,9 @@ enum http_host_state
 #define STRICT_TOKEN(c)     (tokens[(unsigned char)c])
 
 #define NEXTCHAR() \
-  if (UNLIKELY(++p == (data+len))) { goto outofloop; }      \
+  if (++p == (data+len)) { goto outofloop; }      \
   ch = *p;                                                  \
-  parser->nread += 1;                                              \
-  if (UNLIKELY(parser->nread > (HTTP_MAX_HEADER_SIZE))) {            \
-    SET_ERRNO(HPE_HEADER_OVERFLOW);                                  \
-    goto error;                                                      \
-  }
+  COUNT_HEADER_SIZE(1);                                     \
 
 #if HTTP_PARSER_STRICT
 #define TOKEN(c)            (tokens[(unsigned char)c])
@@ -818,7 +814,10 @@ reexecute:
       /* major HTTP version or dot */
       case s_res_http_major:
       {
-        if ( ch != '.' ) {
+        if (ch == '.') {
+          UPDATE_STATE(s_res_first_http_minor);
+          NEXTCHAR();
+        } else {
 
           if (!IS_NUM(ch)) {
             SET_ERRNO(HPE_INVALID_VERSION);
@@ -835,8 +834,6 @@ reexecute:
 
           break;
         }
-        UPDATE_STATE(s_res_first_http_minor);
-        NEXTCHAR();
       }
 
       /* first digit of minor HTTP version */
