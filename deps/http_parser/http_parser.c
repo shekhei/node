@@ -425,9 +425,9 @@ enum http_host_state
 #define STRICT_TOKEN(c)     (tokens[(unsigned char)c])
 
 #define NEXTCHAR() \
-  if (++p == (data+len)) { goto outofloop; }      \
+  if (p+1 == (data+len)) { break; }      \
   ch = *p;                                                  \
-  COUNT_HEADER_SIZE(1);                                     \
+  COUNT_HEADER_SIZE(1);
 
 #if HTTP_PARSER_STRICT
 #define TOKEN(c)            (tokens[(unsigned char)c])
@@ -733,7 +733,6 @@ reexecute:
 
         if (ch == 'H') {
           UPDATE_STATE(s_res_or_resp_H);
-
           CALLBACK_NOTIFY(message_begin);
         } else {
           parser->type = HTTP_REQUEST;
@@ -2060,7 +2059,6 @@ reexecute:
         goto error;
     }
   }
-outofloop:
   /* Run callbacks for any marks that we have leftover after we ran our of
    * bytes. There should be at most one of these set, so it's OK to invoke
    * them in series (unset marks will not result in callbacks).
