@@ -92,7 +92,7 @@ benchasm: http_parser.o bench.o
 bench.o: bench.c http_parser.h Makefile
 	$(CC) $(CPPFLAGS_BENCH) $(CFLAGS_BENCH) -c bench.c -o $@
 
-asm-fast:
+bench.asm:
 	$(CC) $(CPPFLAGS_BENCH) $(CFLAGS_BENCH) -S -fverbose-asm -c http_parser.c -o $@
 
 http_parser.o: http_parser.c http_parser.h Makefile
@@ -149,7 +149,7 @@ clean:
 	rm -f *.o *.a tags test test_fast test_g \
 		http_parser.tar libhttp_parser.so.* \
 		url_parser url_parser_g parsertrace parsertrace_g \
-		asm-fast \
+		bench.asm \
 		*.exe *.exe.so
 
 contrib/url_parser.c:	http_parser.h
