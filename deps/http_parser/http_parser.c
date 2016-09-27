@@ -426,7 +426,7 @@ enum http_host_state
 
 #define NEXTCHAR() \
   if (p+1 == (data+len)) { break; }      \
-  ch = *p;                                                  \
+  ch = *++p;                                                  \
   COUNT_HEADER_SIZE(1);
 
 #if HTTP_PARSER_STRICT
