@@ -425,9 +425,9 @@ enum http_host_state
 #define STRICT_TOKEN(c)     (tokens[(unsigned char)c])
 
 #define NEXTCHAR() \
-  if (p+1 == (data+len)) { break; }      \
+  if (p+1 == (data+len)) { COUNT_HEADER_SIZE(0); break; }      \
   ch = *++p;                                                  \
-  COUNT_HEADER_SIZE(1);
+  ++parser->nread;
 
 #if HTTP_PARSER_STRICT
 #define TOKEN(c)            (tokens[(unsigned char)c])
